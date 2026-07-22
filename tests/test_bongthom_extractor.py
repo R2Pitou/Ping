@@ -63,6 +63,26 @@ class BongThomExtractorTests(unittest.TestCase):
         self.assertEqual(jobs[0].company, "Acme")
         self.assertEqual(jobs[0].location, "Phnom Penh")
 
+    def test_discovers_job_detail_urls_from_the_bongthom_rss_feed(self) -> None:
+        rss = """
+        <rss><channel>
+          <link>https://www.bongthom.com/rss.xml</link>
+          <item><link>https://www.bongthom.com/job_detail/teacher_40686.html</link></item>
+          <item><link>https://www.bongthom.com/job_detail/view_detail_40683.html</link></item>
+          <item><link>https://www.bongthom.com/blog/announcement_123.html</link></item>
+        </channel></rss>
+        """
+
+        links = BongThomExtractor().links(rss, "https://www.bongthom.com/rss.xml")
+
+        self.assertEqual(
+            links,
+            {
+                "https://www.bongthom.com/job_detail/teacher_40686.html",
+                "https://www.bongthom.com/job_detail/view_detail_40683.html",
+            },
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

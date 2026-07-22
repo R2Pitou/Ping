@@ -11,9 +11,10 @@ from ping.models import JobRecord
 from .base import Extractor
 
 
-JOB_ID_RE = re.compile(r"(?:job[_-]?detail|jobs?)[^\d]*(\d+)", re.IGNORECASE)
+JOB_ID_RE = re.compile(r"/job_detail/(?:.*?_(\d+)\.html|(\d+)(?:/)?$)", re.IGNORECASE)
 BTDC_ID_RE = re.compile(r"BTDC-ID\s*:\s*(\d+)", re.IGNORECASE)
 POSITION_ID_RE = re.compile(r"^job-detail-pos-(\d+)$")
+RSS_LINK_RE = re.compile(r"<link>\s*(.*?)\s*</link>", re.IGNORECASE | re.DOTALL)
 SPACE_RE = re.compile(r"\s+")
 KNOWN_LABELS = ("Company", "Location", "Salary", "Type", "Closing Date")
 VOID_ELEMENTS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"}
@@ -117,7 +118,7 @@ class BongThomExtractor(Extractor):
         parser = _parse(html)
         base_host = urlparse(page_url).netloc
         discovered: set[str] = set()
-        for href in parser.links:
+        for href in [*parser.links, *_rss_links(html)]:
             absolute = urljoin(page_url, href)
             parsed = urlparse(absolute)
             if parsed.scheme not in {"http", "https"}:
@@ -216,7 +217,9 @@ class BongThomExtractor(Extractor):
         parsed = urlparse(page_url)
         match = JOB_ID_RE.search(parsed.path)
         if match:
-            return f"bongthom:{match.group(1)}"
+            job_id = next((value for value in match.groups() if value), None)
+            if job_id:
+                return f"bongthom:{job_id}"
 
         query = parse_qs(parsed.query)
         for key in ("id", "job_id", "jobid"):
@@ -275,6 +278,10 @@ def _body_text(html: str) -> str | None:
     text = re.sub(r"(?is)<(script|style).*?>.*?</\1>", " ", html)
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     return _clean(text)
+
+
+def _rss_links(xml: str) -> list[str]:
+    return [_clean(match.group(1)) for match in RSS_LINK_RE.finditer(xml) if _clean(match.group(1))]
 
 
 def _announcement_identifier(text: str | None) -> str | None:

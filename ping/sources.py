@@ -8,7 +8,7 @@ from .models import Source
 
 
 def configured_sources(logger: PingLogger = NULL_LOGGER) -> dict[str, tuple[Source, Extractor]]:
-    bongthom_seed = os.environ.get("PING_BONGTHOM_SEED_URL", "https://www.bongthom.com/")
+    bongthom_seed = os.environ.get("PING_BONGTHOM_SEED_URL", "https://www.bongthom.com/rss.xml")
     bongthom = Source(
         name="bongthom",
         base_url="https://www.bongthom.com/",
