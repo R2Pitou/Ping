@@ -1,14 +1,10 @@
 # Ping
 
-Ping is a small, respectful web spider for labour market observatories. It
-traverses configured sources, fetches pages politely, extracts structured job
-advertisements, hashes normalized content, and archives immutable revisions in
+Ping is a small, polite web spider for the public web. It
+traverses configured sources, fetches pages respectfully, 
+extracts structured data based on configured rules, 
+hashes normalized content, and archives immutable revisions in
 SQLite.
-
-The labour market is the first domain, not the limit of the engine. With clean
-extractors, the same core can archive theatre listings, government tenders, real
-estate notices, procurement notices, or any other source that can be represented
-as structured observations.
 
 ## Principles
 
@@ -75,7 +71,7 @@ This repository implements the MVP from the technical specification:
 - Python CLI
 - SQLite storage
 - resumable crawl queue
-- polite fetcher with retries, backoff, timeout, rate limiting, and jitter
+- polite fetcher with  retries, backoff, timeout, rate limiting, and jitter
 - source-specific extractor interface
 - initial `bongthom` source/extractor
 

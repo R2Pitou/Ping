@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ping-lmi"
 version = "0.1.0"
-description = "Respectful web spider for labour market observatories"
+description = "Ping Peang a Polite web spider"
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Ping" }]
