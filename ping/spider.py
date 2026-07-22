@@ -33,7 +33,7 @@ class Spider:
         links = self.extractor.links(html, page_url)
         self.logger.info("Spider", f"{len(links)} links discovered")
         for link in sorted(links):
-            self.logger.verbose("Spider", f"Discovered URL: {link}")
+            self.logger.trace("Spider", f"Discovered URL: {link}")
         queued_count = self.archivist.enqueue_many(crawl_id, links)
         self.logger.verbose("Spider", f"{queued_count} new URL(s) queued")
         return links
@@ -42,5 +42,5 @@ class Spider:
         base = self.source.crawl_delay_ms / 1000
         jitter = random.uniform(0, min(base, 0.5))
         delay = base + jitter
-        self.logger.info("Spider", f"Sleeping {delay:.1f} seconds")
+        self.logger.info("Spider", f"Sleeping {delay:.1f} s")
         time.sleep(delay)

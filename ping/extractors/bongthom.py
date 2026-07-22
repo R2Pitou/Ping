@@ -88,13 +88,17 @@ class BongThomExtractor(Extractor):
         return discovered
 
     def jobs(self, html: str, page_url: str) -> list[JobRecord]:
-        self.logger.info("Extractor", "Parsing job advertisement")
+        self.logger.verbose("Extractor", "Parsing job advertisement")
         source_identifier = self._source_identifier(page_url)
         if source_identifier is None:
             self.logger.info("Extractor", "Rejected page: no job schema detected")
             return []
 
         parser = _parse(html)
+        self.logger.verbose("Extractor", 'CSS selector ".job-title": not configured; using title and h1 fallback')
+        self.logger.trace("Extractor", f"Raw title: {parser.title}")
+        self.logger.trace("Extractor", f"Raw h1: {parser.h1}")
+        self.logger.trace("Extractor", f"Raw meta: {parser.meta}")
         title = parser.h1 or _strip_site_suffix(parser.title)
         description = _first_present(
             parser.meta.get("description"),
@@ -130,7 +134,7 @@ class BongThomExtractor(Extractor):
         return None
 
     def _log_job(self, job: JobRecord) -> None:
-        self.logger.info("Extractor", f"Source ID: {job.source_identifier}")
+        self.logger.verbose("Extractor", f"Source ID: {job.source_identifier}")
         for label, value in (
             ("Title", job.title),
             ("Company", job.company),
@@ -141,9 +145,9 @@ class BongThomExtractor(Extractor):
             ("Closing date", job.closing_date),
         ):
             if value:
-                self.logger.info("Extractor", f"{label}: {value}")
+                self.logger.verbose("Extractor", f"{label}: {value}")
             else:
-                self.logger.verbose("Extractor", f"{label}: not found")
+                self.logger.trace("Extractor", f"{label}: not found")
 
 
 def _parse(html: str) -> _HTMLTextParser:

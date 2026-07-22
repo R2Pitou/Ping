@@ -17,6 +17,8 @@ class Archivist:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(self.db_path)
         self.connection.row_factory = sqlite3.Row
+        if self.logger.trace_enabled:
+            self.connection.set_trace_callback(lambda statement: self.logger.trace("Archivist", f"SQL {statement}"))
         self.connection.execute("PRAGMA foreign_keys = ON")
         self.logger.verbose("Archivist", f"Opened database: {self.db_path}")
         self.initialize()
@@ -129,11 +131,11 @@ class Archivist:
             (source_id, now),
         )
         crawl_id = int(cursor.lastrowid)
-        self.logger.info("Archivist", f"Created crawl {crawl_id}")
+        self.logger.verbose("Archivist", f"Created crawl {crawl_id}")
         for url in seeds:
             self.enqueue(crawl_id, url)
         self.connection.commit()
-        self.logger.info("Archivist", f"Queued {len(seeds)} seed URL(s)")
+        self.logger.verbose("Archivist", f"Queued {len(seeds)} seed URL(s)")
         self.logger.verbose("Archivist", f"SQL transaction committed: crawl {crawl_id} started")
         self._log_queue_size(crawl_id)
         return crawl_id
@@ -166,9 +168,9 @@ class Archivist:
         )
         queued = cursor.rowcount == 1
         if queued:
-            self.logger.verbose("Archivist", f"Queued URL: {url}")
+            self.logger.trace("Archivist", f"Queued URL: {url}")
         else:
-            self.logger.verbose("Spider", f"URL already visited or queued: {url}")
+            self.logger.trace("Spider", f"URL already visited or queued: {url}")
         return queued
 
     def enqueue_many(self, crawl_id: int, urls: Iterable[str]) -> int:
@@ -177,7 +179,7 @@ class Archivist:
             if self.enqueue(crawl_id, url):
                 queued_count += 1
         self.connection.commit()
-        self.logger.verbose("Archivist", f"SQL transaction committed: {queued_count} URL(s) queued")
+        self.logger.trace("Archivist", f"Queue mutation committed: {queued_count} URL(s) queued")
         self._log_queue_size(crawl_id)
         return queued_count
 
@@ -219,7 +221,7 @@ class Archivist:
             (crawl_id,),
         )
         self.connection.commit()
-        self.logger.info("Archivist", f"Stored page: HTTP {status_code or 'unknown'} {url}")
+        self.logger.verbose("Archivist", f"Stored page: HTTP {status_code or 'unknown'} {url}")
         self.logger.verbose("Archivist", "SQL transaction committed: page marked visited")
         self._log_queue_size(crawl_id)
 
@@ -253,7 +255,7 @@ class Archivist:
     def store_job(self, crawl_id: int, source_id: int, job: JobRecord) -> str:
         now = utc_now()
         digest = content_hash(job.revision_payload())
-        self.logger.info("Hasher", f"SHA256 {digest}")
+        self.logger.verbose("Hasher", f"SHA256 {digest}")
         row = self.connection.execute(
             """
             SELECT id FROM jobs
@@ -263,7 +265,7 @@ class Archivist:
         ).fetchone()
 
         if row is None:
-            self.logger.info("Archivist", f"New job found: {job.source_identifier}")
+            self.logger.verbose("Archivist", f"New job found: {job.source_identifier}")
             cursor = self.connection.execute(
                 """
                 INSERT INTO jobs (source_id, source_identifier, first_seen, last_seen, active)
@@ -283,11 +285,12 @@ class Archivist:
                 (crawl_id,),
             )
             self.connection.commit()
-            self.logger.verbose("Archivist", "SQL transaction committed: new job revision stored")
+            self.logger.verbose("Archivist", "INSERT revision")
+            self.logger.trace("Archivist", "SQL transaction committed: new job revision stored")
             return "new"
 
         job_id = int(row["id"])
-        self.logger.info("Archivist", f"Existing job found: {job.source_identifier}")
+        self.logger.verbose("Archivist", f"Existing job found: {job.source_identifier}")
         self.connection.execute(
             "UPDATE jobs SET last_seen = ?, active = 1 WHERE id = ?",
             (now, job_id),
@@ -306,23 +309,25 @@ class Archivist:
             (crawl_id,),
         )
         if latest and latest["content_hash"] == digest:
-            self.logger.info("Archivist", "Content unchanged")
+            self.logger.verbose("Archivist", "Content unchanged")
             self.connection.execute(
                 "UPDATE crawls SET unchanged_jobs = unchanged_jobs + 1 WHERE id = ?",
                 (crawl_id,),
             )
             self.connection.commit()
-            self.logger.verbose("Archivist", "SQL transaction committed: job last_seen updated")
+            self.logger.verbose("Archivist", "UPDATE last_seen")
+            self.logger.trace("Archivist", "SQL transaction committed: job last_seen updated")
             return "unchanged"
 
-        self.logger.info("Archivist", "Content changed; creating revision")
+        self.logger.verbose("Archivist", "Content changed; creating revision")
         self._insert_revision(job_id, digest, job)
         self.connection.execute(
             "UPDATE crawls SET updated_jobs = updated_jobs + 1 WHERE id = ?",
             (crawl_id,),
         )
         self.connection.commit()
-        self.logger.verbose("Archivist", "SQL transaction committed: updated job revision stored")
+        self.logger.verbose("Archivist", "INSERT revision")
+        self.logger.trace("Archivist", "SQL transaction committed: updated job revision stored")
         return "updated"
 
     def _insert_revision(self, job_id: int, digest: str, job: JobRecord) -> None:
@@ -356,7 +361,7 @@ class Archivist:
             (utc_now(), status, crawl_id),
         )
         self.connection.commit()
-        self.logger.info("Archivist", f"Crawl {crawl_id} finished with status: {status}")
+        self.logger.verbose("Archivist", f"Crawl {crawl_id} finished with status: {status}")
         self.logger.verbose("Archivist", "SQL transaction committed: crawl finished")
 
     def crawl_summary(self, crawl_id: int) -> CrawlSummary:

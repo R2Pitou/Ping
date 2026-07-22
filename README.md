@@ -59,10 +59,31 @@ Archivist  Content unchanged
 Spider     Sleeping 2.3 seconds
 ```
 
-Default logging is informative but concise. Verbose logging is designed for
-debugging without source changes and includes discovered URLs, queued URLs,
-HTTP retries, backoff timing, parsed fields, generated hashes, SQL transactions,
-queue sizes, skipped URLs, rejected pages, and elapsed time for pipeline stages.
+Ping has three log levels.
+
+Normal is the default. It shows what a human wants to see: crawl start and
+finish, visited pages, HTTP outcomes with timings, jobs parsed, archive
+outcomes, sleep intervals, errors, and the final summary.
+
+Verbose shows what a developer needs: queue sizes, HTTP requests and selected
+response headers, parser strategy, parsed fields, generated hashes, revision
+actions, `last_seen` updates, and component timings.
+
+Trace shows absolutely everything Ping can observe: every SQL statement, every
+discovered URL, every queue mutation, every retry/backoff detail, timing, and
+raw parser output.
+
+Every log line includes a timestamp and subsystem:
+
+```text
+09:12:18 Spider     Starting crawl: bongthom
+09:12:18 Spider     Visiting page 1: https://...
+09:12:19 Fetcher    HTTP 200 (183 KB, 412 ms)
+09:12:19 Extractor  17 job(s) parsed in 14 ms
+09:12:19 Archivist  11 inserted, 2 updated, 4 unchanged in 8 ms
+09:12:19 Spider     Sleeping 2.1 s
+09:12:21 Spider     Crawl complete
+```
 
 ## MVP
 
@@ -86,10 +107,24 @@ python -m ping resume bongthom --max-pages 25
 python -m ping stats
 ```
 
-Use `--verbose` before the command to expose every runtime decision:
+Use `--verbose` before the command for developer-level detail:
 
 ```powershell
 python -m ping --verbose crawl bongthom --max-pages 25
+```
+
+Use `--trace` when you want the terminal equivalent of a packet capture:
+
+```powershell
+python -m ping --trace crawl bongthom --max-pages 25
+```
+
+Every subsystem is executable independently:
+
+```powershell
+python -m ping fetch https://example.com/jobs
+python -m ping extract page.html --source bongthom --url https://www.bongthom.com/job_detail/84722
+python -m ping hash job.json
 ```
 
 By default Ping stores data in `ping.sqlite3`. Use `--db` to choose another path:
@@ -112,6 +147,9 @@ ping crawl [source]
 ping resume [source]
 ping stats
 ping sources
+ping fetch URL
+ping extract file.html
+ping hash file.json
 ```
 
 The installed console command is available after editable installation:

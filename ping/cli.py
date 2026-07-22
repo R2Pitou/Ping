@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 from .archivist import Archivist
 from .app import CrawlApplication
 from .fetcher import Fetcher
+from .hasher import canonical_json, content_hash
 from .logging import PingLogger
 from .models import CrawlSummary
 from .sources import configured_sources
@@ -15,8 +17,21 @@ from .spider import Spider
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    logger = PingLogger(verbose_enabled=args.verbose)
+    if args.command is None:
+        parser.print_help()
+        return 1
+
+    logger = PingLogger(level=_log_level(args))
+
+    if args.command == "fetch":
+        return _fetch(args, logger)
+    if args.command == "hash":
+        return _hash(args, logger)
+
     sources = configured_sources(logger=logger)
+
+    if args.command == "extract":
+        return _extract(args, logger, sources)
 
     with _open_archivist(args.db, logger) as archivist:
         for source, _extractor in sources.values():
@@ -39,7 +54,8 @@ def build_parser() -> argparse.ArgumentParser:
         description="Respectful web spider for labour market observatories",
     )
     parser.add_argument("--db", default="ping.sqlite3", type=Path, help="SQLite database path")
-    parser.add_argument("--verbose", action="store_true", help="Log every runtime decision")
+    parser.add_argument("--verbose", action="store_true", help="Log developer-level details")
+    parser.add_argument("--trace", action="store_true", help="Log every observable internal decision")
     subparsers = parser.add_subparsers(dest="command")
 
     crawl = subparsers.add_parser("crawl", help="Start a new crawl")
@@ -52,7 +68,26 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("stats", help="Show archive statistics")
     subparsers.add_parser("sources", help="List configured websites")
+
+    fetch = subparsers.add_parser("fetch", help="Run only the fetcher against one URL")
+    fetch.add_argument("url", help="URL to fetch")
+
+    extract = subparsers.add_parser("extract", help="Run only an extractor against one HTML file")
+    extract.add_argument("html_file", type=Path, help="HTML file to parse")
+    extract.add_argument("--source", default="bongthom", help="Extractor source name")
+    extract.add_argument("--url", default=None, help="Source URL represented by the HTML file")
+
+    hash_command = subparsers.add_parser("hash", help="Run only the hasher against one JSON file")
+    hash_command.add_argument("json_file", type=Path, help="JSON object to normalize and hash")
     return parser
+
+
+def _log_level(args: argparse.Namespace) -> str:
+    if args.trace:
+        return "trace"
+    if args.verbose:
+        return "verbose"
+    return "normal"
 
 
 class _open_archivist:
@@ -121,9 +156,53 @@ def _crawl(args: argparse.Namespace, archivist: Archivist, sources: dict[str, ob
 
 
 def _print_summary(summary: CrawlSummary) -> None:
-    print(f"pages visited: {summary.pages_visited}")
-    print(f"pages failed: {summary.pages_failed}")
-    print(f"jobs discovered: {summary.jobs_discovered}")
-    print(f"new jobs: {summary.new_jobs}")
-    print(f"updated jobs: {summary.updated_jobs}")
-    print(f"unchanged jobs: {summary.unchanged_jobs}")
+    print("Summary")
+    print(f"    Pages: {summary.pages_visited}")
+    print(f"    Failed: {summary.pages_failed}")
+    print(f"    Jobs: {summary.jobs_discovered}")
+    print(f"    New: {summary.new_jobs}")
+    print(f"    Updated: {summary.updated_jobs}")
+    print(f"    Unchanged: {summary.unchanged_jobs}")
+
+
+def _fetch(args: argparse.Namespace, logger: PingLogger) -> int:
+    result = Fetcher(logger=logger).fetch(args.url)
+    if result.html is None:
+        logger.info("Fetcher", f"Fetch failed: {result.error or 'unknown error'}")
+        return 1
+    logger.verbose("Fetcher", f"Fetched characters: {len(result.html)}")
+    return 0
+
+
+def _extract(args: argparse.Namespace, logger: PingLogger, sources: dict[str, object]) -> int:
+    if args.source not in sources:
+        logger.info("Extractor", f"Unknown source: {args.source}")
+        return 2
+
+    html = args.html_file.read_text(encoding="utf-8", errors="replace")
+    source, extractor = sources[args.source]
+    page_url = args.url or f"{source.base_url.rstrip('/')}/{args.html_file.name}"
+    logger.info("Extractor", f"Reading {args.html_file}")
+    logger.info("Extractor", f"Assuming source URL: {page_url}")
+    links = extractor.links(html, page_url)
+    logger.info("Extractor", f"Parsed {len(links)} link(s)")
+    for link in sorted(links):
+        logger.trace("Extractor", f"Link: {link}")
+    jobs = extractor.jobs(html, page_url)
+    logger.info("Extractor", f"Parsed {len(jobs)} job(s)")
+    if jobs:
+        print(json.dumps([{"source_identifier": job.source_identifier, **job.revision_payload()} for job in jobs], indent=2))
+    return 0
+
+
+def _hash(args: argparse.Namespace, logger: PingLogger) -> int:
+    payload = json.loads(args.json_file.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        logger.info("Hasher", "Rejected input: top-level JSON value must be an object")
+        return 2
+
+    normalized = json.loads(canonical_json(payload))
+    logger.info("Hasher", "Normalized object")
+    print(json.dumps(normalized, indent=2, sort_keys=True))
+    logger.info("Hasher", f"SHA256 {content_hash(payload)}")
+    return 0

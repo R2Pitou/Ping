@@ -5,9 +5,10 @@ import socket
 import time
 import urllib.error
 import urllib.request
+from time import perf_counter
 from dataclasses import dataclass, field
 
-from .logging import NULL_LOGGER, PingLogger
+from .logging import NULL_LOGGER, PingLogger, format_duration
 from .models import FetchResult
 
 
@@ -26,26 +27,33 @@ class Fetcher:
     def fetch(self, url: str) -> FetchResult:
         last_error: str | None = None
         for attempt in range(self.max_retries + 1):
-            self.logger.info("Fetcher", f"GET {url}")
+            self.logger.verbose("Fetcher", f"GET {url}")
+            started = perf_counter()
             try:
                 request = urllib.request.Request(url, headers={"User-Agent": self.user_agent})
                 with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
                     body = response.read()
                     charset = response.headers.get_content_charset() or "utf-8"
                     html = body.decode(charset, errors="replace")
-                    self.logger.info("Fetcher", f"HTTP {response.status} ({_format_size(len(body))})")
+                    elapsed = format_duration(perf_counter() - started)
+                    self.logger.info("Fetcher", f"HTTP {response.status} ({_format_size(len(body))}, {elapsed})")
+                    self.logger.verbose("Fetcher", f"Content-Type: {response.headers.get('Content-Type', 'unknown')}")
+                    for header, value in response.headers.items():
+                        self.logger.trace("Fetcher", f"Header {header}: {value}")
                     return FetchResult(url=url, status_code=response.status, html=html)
             except urllib.error.HTTPError as exc:
+                elapsed = format_duration(perf_counter() - started)
                 if exc.code not in TEMPORARY_STATUS_CODES or attempt >= self.max_retries:
-                    self.logger.info("Fetcher", f"HTTP {exc.code} {exc.reason}")
+                    self.logger.info("Fetcher", f"HTTP {exc.code} {exc.reason} ({elapsed})")
                     return FetchResult(url=url, status_code=exc.code, html=None, error=str(exc))
-                self.logger.info("Fetcher", f"HTTP {exc.code} {exc.reason}")
+                self.logger.info("Fetcher", f"HTTP {exc.code} {exc.reason} ({elapsed})")
                 last_error = str(exc)
             except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+                elapsed = format_duration(perf_counter() - started)
                 if attempt >= self.max_retries:
-                    self.logger.info("Fetcher", f"Request failed: {exc}")
+                    self.logger.info("Fetcher", f"Request failed: {exc} ({elapsed})")
                     return FetchResult(url=url, status_code=None, html=None, error=str(exc))
-                self.logger.info("Fetcher", f"Request failed: {exc}")
+                self.logger.info("Fetcher", f"Request failed: {exc} ({elapsed})")
                 last_error = str(exc)
 
             self._sleep_before_retry(attempt)
@@ -56,7 +64,8 @@ class Fetcher:
         delay = self.backoff_base_seconds * (2**attempt)
         delay += random.uniform(0, self.jitter_seconds)
         self.logger.info("Fetcher", f"Retry {attempt + 1} of {self.max_retries}")
-        self.logger.info("Fetcher", f"Waiting {delay:.1f} seconds")
+        self.logger.info("Fetcher", f"Waiting {delay:.1f} s")
+        self.logger.trace("Fetcher", f"Backoff base={self.backoff_base_seconds:.1f} s jitter={self.jitter_seconds:.1f} s")
         time.sleep(delay)
 
 
