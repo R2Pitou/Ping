@@ -22,6 +22,14 @@ class Spider:
         self.logger.info("Spider", f"Starting crawl: {self.source.name}")
         return self.archivist.start_crawl(self.source_id, self.source.seed_urls)
 
+    def crawl(self) -> int:
+        """Begin a crawl.
+
+        This is the small public verb used by the Ping facade; orchestration
+        remains the responsibility of ``CrawlApplication``.
+        """
+        return self.start()
+
     def resume(self) -> int | None:
         self.logger.info("Spider", f"Resuming crawl: {self.source.name}")
         return self.archivist.resume_crawl(self.source_id)

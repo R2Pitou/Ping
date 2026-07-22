@@ -330,6 +330,39 @@ class Archivist:
         self.logger.trace("Archivist", "SQL transaction committed: updated job revision stored")
         return "updated"
 
+    def commit(self, crawl_id: int, source_id: int, job: JobRecord) -> str:
+        """Preserve a job observation using the concise Sanya vocabulary."""
+        return self.store_job(crawl_id, source_id, job)
+
+    def find_jobs(self, query: str, limit: int = 50) -> list[sqlite3.Row]:
+        """Find current job records by title, company, or location."""
+        pattern = f"%{query.strip()}%"
+        if not query.strip():
+            return []
+        return list(
+            self.connection.execute(
+                """
+                SELECT jobs.source_identifier, job_revisions.title, job_revisions.company,
+                       job_revisions.location, job_revisions.salary, job_revisions.application_url,
+                       job_revisions.created_at
+                FROM jobs
+                JOIN job_revisions ON job_revisions.id = (
+                    SELECT revisions.id
+                    FROM job_revisions AS revisions
+                    WHERE revisions.job_id = jobs.id
+                    ORDER BY revisions.created_at DESC, revisions.id DESC
+                    LIMIT 1
+                )
+                WHERE job_revisions.title LIKE ?
+                   OR job_revisions.company LIKE ?
+                   OR job_revisions.location LIKE ?
+                ORDER BY job_revisions.created_at DESC, jobs.id DESC
+                LIMIT ?
+                """,
+                (pattern, pattern, pattern, limit),
+            )
+        )
+
     def _insert_revision(self, job_id: int, digest: str, job: JobRecord) -> None:
         payload = job.revision_payload()
         self.connection.execute(

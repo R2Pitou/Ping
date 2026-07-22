@@ -13,3 +13,7 @@ class Extractor(ABC):
     @abstractmethod
     def jobs(self, html: str, page_url: str) -> list[JobRecord]:
         """Return structured job advertisements discovered in the page."""
+
+    def get(self, html: str, page_url: str) -> list[JobRecord]:
+        """Return structured records using the concise Dok vocabulary."""
+        return self.jobs(html, page_url)

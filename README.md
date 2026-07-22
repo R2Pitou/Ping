@@ -163,12 +163,32 @@ ping sources
 
 The components deliberately have narrow responsibilities:
 
-- `ping.spider` traverses sources and discovers pages.
-- `ping.fetcher` performs HTTP requests and returns raw HTML.
-- `ping.extractors` convert source-specific HTML into normalized `JobRecord` objects.
-- `ping.hasher` creates deterministic SHA-256 content identities.
-- `ping.archivist` owns SQLite persistence, revision history, and crawl state.
-- `ping.app` coordinates the command-line crawl workflow.
+| Public name | Technical responsibility | Descriptive implementation |
+| --- | --- | --- |
+| `Ping` | Spider and traversal | `ping.spider.Spider` |
+| `Yok` | Fetch pages | `ping.fetcher.Fetcher` |
+| `Dok` | Extract structured records | `ping.extractors.Extractor` |
+| `Tra` | Stamp content identity | `ping.hasher` |
+| `Sanya` | Commit and preserve history | `ping.archivist.Archivist` |
+| `Rok` | Find records in the archive | `ping.rok.Rok` |
+
+The Khmer names are concise public vocabulary, not a replacement for technical
+meaning. The implementation retains descriptive module and class names so that
+the code remains easy to read and navigate.
+
+```python
+from ping import Dok, Ping, Rok, Sanya, Tra, Yok
+
+ping.crawl()
+yok.fetch(url)
+dok.get(html, page_url)
+tra.hash(job)
+sanya.commit(crawl_id, source_id, job)
+rok.find(query)
+```
+
+`ping.app` coordinates the command-line crawl workflow; it is intentionally
+separate from traversal.
 
 The database is append-only for job revisions. Existing jobs get `last_seen` updates;
 meaningful content edits create new immutable revisions.

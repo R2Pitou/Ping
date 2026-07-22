@@ -6,6 +6,8 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from .models import JobRecord
+
 
 _SPACE_RE = re.compile(r"\s+")
 
@@ -36,3 +38,16 @@ def content_hash(payload: Mapping[str, Any]) -> str:
 
 def html_hash(html: str) -> str:
     return hashlib.sha256(html.encode("utf-8", errors="replace")).hexdigest()
+
+
+class Tra:
+    """Content-identity component.
+
+    The explicit name keeps call sites compact while the module-level helpers
+    remain available for low-level hashing work.
+    """
+
+    @staticmethod
+    def hash(job: JobRecord | Mapping[str, Any]) -> str:
+        payload = job.revision_payload() if isinstance(job, JobRecord) else job
+        return content_hash(payload)
