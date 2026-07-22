@@ -1,4 +1,5 @@
 # Ping
+> ពីងពាង [ping-peang] = spider in Khmer
 
 Ping is a small, polite web spider for the public web. It
 traverses configured sources, fetches pages respectfully, 
@@ -26,6 +27,20 @@ Information is immutable.
 History is never discarded.
 
 The database is the source of truth.
+
+## Versioning
+
+Ping follows semantic versioning: `major.minor.patch`.
+
+- Patch releases (`x.x.+1`) are automatic for non-breaking implementation
+  changes, including fixes, refactors, documentation, logging, tests, typo
+  corrections, and small features.
+- Minor releases (`x.+1.0`) are automatic when a meaningful engineering
+  milestone introduces a usable capability, such as a new subsystem, CLI
+  command, scraper, database table, or feature.
+- Major releases (`+1.0.0`) are human-only. They mark a public release,
+  breaking compatibility, an API redesign, an architecture rewrite, or a
+  philosophical shift in what Ping is.
 
 ## Logging
 
@@ -123,7 +138,7 @@ Every subsystem is executable independently:
 
 ```powershell
 python -m ping fetch https://example.com/jobs
-python -m ping extract page.html --source bongthom --url https://www.bongthom.com/job_detail/84722
+python -m ping extract page.html --source bongthom --url https://www.bongthom.com/job_detail/various_positions_39416.html
 python -m ping hash job.json
 ```
 

@@ -3,15 +3,40 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ping-lmi"
-version = "0.1.0"
-description = "Ping Peang a Polite web spider"
+name = "ping-spider"
+version = "0.2.1"
+description = "Ping Peang. A polite, resumable web spider and structured content archiver."
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "Ping" }]
+license = { text = "MIT" }
+
+authors = [
+    { name = "Arttu Pitou At" }
+]
+
+dependencies = [
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "flake8>=7",
+]
 
 [project.scripts]
 ping-spider = "ping.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["ping*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.flake8]
+max-line-length = 100
+max-complexity = 10
+extend-ignore = [
+    "E203",
+    "W503",
+]
