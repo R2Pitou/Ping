@@ -143,20 +143,21 @@ python -m ping crawl bongthom
 ## CLI
 
 ```text
-ping crawl [source]
-ping resume [source]
-ping stats
-ping sources
-ping fetch URL
-ping extract file.html
-ping hash file.json
+python -m ping crawl [source]
+python -m ping resume [source]
+python -m ping stats
+python -m ping sources
+python -m ping fetch URL
+python -m ping extract file.html
+python -m ping hash file.json
 ```
 
-The installed console command is available after editable installation:
+On Windows, `ping` is reserved by the built-in network diagnostic command. The
+installed console command is therefore `ping-spider`:
 
 ```powershell
 python -m pip install -e .
-ping sources
+ping-spider crawl bongthom --max-pages 25
 ```
 
 ## Design
