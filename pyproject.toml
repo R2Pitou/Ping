@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ping-spider"
-version = "0.2.1"
+version = "0.2.2"
 description = "Ping Peang. A polite, resumable web spider and structured content archiver."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "Apache-2.0"
 
 authors = [
     { name = "Arttu Pitou At" }
