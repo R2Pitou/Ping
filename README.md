@@ -208,3 +208,5 @@ separate from traversal.
 
 The database is append-only for job revisions. Existing jobs get `last_seen` updates;
 meaningful content edits create new immutable revisions.
+
+[![CI](https://github.com/R2Pitou/Ping/actions/workflows/ci.yml/badge.svg)](https://github.com/R2Pitou/Ping/actions/workflows/ci.yml)
