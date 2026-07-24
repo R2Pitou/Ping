@@ -9,6 +9,16 @@ from .logging import NULL_LOGGER, PingLogger
 from .models import CrawlSummary, JobRecord, Source, utc_now
 
 
+INSPECTABLE_TABLES = {
+    "sources": {"table": "sources", "filters": {"source_id": "id"}},
+    "crawls": {"table": "crawls", "filters": {"source_id": "source_id", "crawl_id": "id"}},
+    "pages": {"table": "pages", "filters": {"crawl_id": "crawl_id"}},
+    "jobs": {"table": "jobs", "filters": {"source_id": "source_id", "job_id": "id"}},
+    "revisions": {"table": "job_revisions", "filters": {"job_id": "job_id"}},
+    "queue": {"table": "crawl_queue", "filters": {"crawl_id": "crawl_id"}},
+}
+
+
 class Archivist:
     def __init__(self, db_path: str | Path, logger: PingLogger = NULL_LOGGER) -> None:
         self.logger = logger
@@ -431,6 +441,47 @@ class Archivist:
                 "SELECT name, base_url, enabled, crawl_delay_ms, created_at FROM sources ORDER BY name"
             )
         )
+
+    def inspect_records(
+        self,
+        table: str,
+        *,
+        record_id: int | None = None,
+        source_id: int | None = None,
+        crawl_id: int | None = None,
+        job_id: int | None = None,
+        limit: int = 50,
+    ) -> list[sqlite3.Row]:
+        """Return persisted records for the terminal inspection interface."""
+        if table not in INSPECTABLE_TABLES:
+            raise ValueError(f"Unknown archive table: {table}")
+        if limit < 1:
+            raise ValueError("Limit must be at least 1")
+
+        definition = INSPECTABLE_TABLES[table]
+        conditions: list[str] = []
+        values: list[int] = []
+        filters = {
+            "id": record_id,
+            "source_id": source_id,
+            "crawl_id": crawl_id,
+            "job_id": job_id,
+        }
+        for name, value in filters.items():
+            if value is None:
+                continue
+            if name == "id":
+                column = "id"
+            else:
+                column = definition["filters"].get(name)
+            if column is None:
+                raise ValueError(f"{table} cannot be filtered by {name.removesuffix('_id')}")
+            conditions.append(f"{column} = ?")
+            values.append(value)
+
+        where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
+        query = f"SELECT * FROM {definition['table']}{where} ORDER BY id DESC LIMIT ?"
+        return list(self.connection.execute(query, (*values, limit)))
 
     def _log_queue_size(self, crawl_id: int) -> None:
         row = self.connection.execute(

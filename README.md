@@ -7,6 +7,14 @@ extracts structured data based on configured rules,
 hashes normalized content, and archives immutable revisions in
 SQLite.
 
+## Project Documents
+
+Phase 2 is designed before it is built. The durable blueprint is in
+[VISION.md](VISION.md), [ARCHITECTURE.md](ARCHITECTURE.md),
+[DATA_MODEL.md](DATA_MODEL.md), [ROADMAP.md](ROADMAP.md), [API.md](API.md),
+and [GUI.md](GUI.md). The preliminary machine-readable API contract is
+[openapi.yaml](openapi.yaml).
+
 ## Principles
 
 Ping is deliberately boring.
@@ -140,6 +148,22 @@ Every subsystem is executable independently:
 python -m ping fetch https://example.com/jobs
 python -m ping extract page.html --source bongthom --url https://www.bongthom.com/job_detail/various_positions_39416.html
 python -m ping hash job.json
+```
+
+## Inspecting Sanya
+
+Ping can inspect every Sanya table without opening SQLite or writing SQL. Lists
+are compact terminal tables; add `--id` to see every field in one stored object.
+
+```powershell
+python -m ping inspect sources
+python -m ping inspect crawls --source 1
+python -m ping inspect pages --crawl 7 --limit 25
+python -m ping inspect jobs --source 1
+python -m ping inspect revisions --job 42
+python -m ping inspect queue --crawl 7
+python -m ping inspect jobs --id 42
+ping-spider jobs
 ```
 
 By default Ping stores data in `ping.sqlite3`. Use `--db` to choose another path:

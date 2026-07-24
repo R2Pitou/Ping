@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: Ping API
+  version: 0.1.0
+  description: Versioned local API over Ping's evidence archive.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      summary: Check archive and index health
+      responses:
+        '200':
+          description: Healthy archive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+  /stats:
+    get:
+      summary: Get archive counters
+      responses:
+        '200':
+          description: Archive statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Stats'
+  /jobs:
+    get:
+      summary: List current jobs
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - name: source_id
+          in: query
+          schema: {type: integer}
+      responses:
+        '200':
+          description: Current job records
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobList'
+  /jobs/{job_id}:
+    get:
+      summary: Get a job and current revision
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job evidence
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Job'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  /jobs/{job_id}/revisions:
+    get:
+      summary: List immutable revisions for a job
+      parameters:
+        - $ref: '#/components/parameters/JobId'
+      responses:
+        '200':
+          description: Job revisions
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RevisionList'}
+  /companies:
+    get:
+      summary: List companies derived from latest revisions
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': {description: Company list}
+  /pages:
+    get:
+      summary: List fetched page observations
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200': {description: Page list}
+  /sources:
+    get:
+      summary: List source configuration and observed state
+      responses:
+        '200': {description: Source list}
+  /crawls:
+    get:
+      summary: List crawl executions
+      responses:
+        '200': {description: Crawl history}
+    post:
+      summary: Start a crawl for a configured source
+      responses:
+        '202': {description: Crawl accepted}
+  /search:
+    get:
+      summary: Search evidence
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: {type: string}
+        - name: mode
+          in: query
+          schema: {type: string, enum: [keyword, semantic, hybrid], default: keyword}
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Ranked evidence results
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/SearchList'}
+components:
+  parameters:
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+  responses:
+    NotFound:
+      description: Requested evidence does not exist
+  schemas:
+    Health:
+      type: object
+      required: [status, database]
+      properties:
+        status: {type: string, enum: [ok, degraded]}
+        database: {type: string}
+        index_freshness: {type: string}
+    Stats:
+      type: object
+      additionalProperties: {type: integer}
+    Job:
+      type: object
+      required: [id, source_id, source_identifier, first_seen, last_seen]
+      properties:
+        id: {type: integer}
+        source_id: {type: integer}
+        source_identifier: {type: string}
+        first_seen: {type: string, format: date-time}
+        last_seen: {type: string, format: date-time}
+        revision: {$ref: '#/components/schemas/Revision'}
+    Revision:
+      type: object
+      required: [id, job_id, content_hash, created_at]
+      properties:
+        id: {type: integer}
+        job_id: {type: integer}
+        content_hash: {type: string}
+        created_at: {type: string, format: date-time}
+        title: {type: [string, 'null']}
+        company: {type: [string, 'null']}
+        location: {type: [string, 'null']}
+        description: {type: [string, 'null']}
+    JobList:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Job'}}
+    RevisionList:
+      type: object
+      properties:
+        items: {type: array, items: {$ref: '#/components/schemas/Revision'}}
+    SearchList:
+      type: object
+      properties:
+        mode: {type: string}
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              job_id: {type: integer}
+              revision_id: {type: integer}
+              score: {type: number}
+              keyword_score: {type: [number, 'null']}
+              semantic_score: {type: [number, 'null']}

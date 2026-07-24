@@ -8,6 +8,8 @@ from .archivist import Archivist
 from .app import CrawlApplication
 from .fetcher import Fetcher
 from .hasher import canonical_json, content_hash
+from .inspection import render_job_detail, render_records, render_rows
+from .inspection_service import ArchiveInspectionService
 from .logging import PingLogger
 from .models import CrawlSummary
 from .sources import configured_sources
@@ -34,13 +36,18 @@ def main(argv: list[str] | None = None) -> int:
         return _extract(args, logger, sources)
 
     with _open_archivist(args.db, logger) as archivist:
-        for source, _extractor in sources.values():
-            archivist.upsert_source(source)
+        if args.command in {"crawl", "resume", "sources"}:
+            for source, _extractor in sources.values():
+                archivist.upsert_source(source)
 
         if args.command == "sources":
             return _sources(archivist, sources)
         if args.command == "stats":
             return _stats(archivist)
+        if args.command == "inspect":
+            return _inspect(args, archivist)
+        if args.command in {"jobs", "show", "pages", "companies", "crawl-history", "revisions", "search", "doctor", "dump"}:
+            return _inspect_command(args, archivist)
         if args.command in {"crawl", "resume"}:
             return _crawl(args, archivist, sources)
 
@@ -68,6 +75,47 @@ def build_parser() -> argparse.ArgumentParser:
 
     subparsers.add_parser("stats", help="Show archive statistics")
     subparsers.add_parser("sources", help="List configured websites")
+
+    inspect = subparsers.add_parser("inspect", help="Inspect persisted Sanya records")
+    inspect.add_argument("table", choices=("sources", "crawls", "pages", "jobs", "revisions", "queue"))
+    inspect.add_argument("--id", type=int, help="Show a complete record by primary key")
+    inspect.add_argument("--source", dest="source_id", type=int, help="Filter by source ID")
+    inspect.add_argument("--crawl", dest="crawl_id", type=int, help="Filter by crawl ID")
+    inspect.add_argument("--job", dest="job_id", type=int, help="Filter by job ID")
+    inspect.add_argument("--limit", type=int, default=50, help="Maximum records to display (default: 50)")
+
+    jobs = subparsers.add_parser("jobs", help="List archived jobs")
+    jobs.add_argument("--source", dest="source_id", type=int, help="Filter by source ID")
+    jobs.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    show = subparsers.add_parser("show", help="Show a job and its immutable revision history")
+    show.add_argument("id", type=int, help="Job ID")
+
+    pages = subparsers.add_parser("pages", help="List fetched pages")
+    pages.add_argument("--crawl", dest="crawl_id", type=int, help="Filter by crawl ID")
+    pages.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    companies = subparsers.add_parser("companies", help="List observed companies")
+    companies.add_argument("query", nargs="?", default=None, help="Optional company-name filter")
+    companies.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    history = subparsers.add_parser("crawl-history", help="List crawl executions")
+    history.add_argument("--source", dest="source_id", type=int, help="Filter by source ID")
+    history.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    revisions = subparsers.add_parser("revisions", help="List immutable job revisions")
+    revisions.add_argument("--job", dest="job_id", type=int, help="Filter by job ID")
+    revisions.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    search = subparsers.add_parser("search", help="Search current jobs by keyword")
+    search.add_argument("query", help="Keyword query")
+    search.add_argument("--limit", type=int, default=50, help="Maximum records to display")
+
+    subparsers.add_parser("doctor", help="Check archive integrity and table counts")
+
+    dump = subparsers.add_parser("dump", help="Dump a Sanya table as JSON")
+    dump.add_argument("table", choices=("sources", "crawls", "pages", "jobs", "revisions", "queue"))
+    dump.add_argument("--limit", type=int, default=1000, help="Maximum records to emit")
 
     fetch = subparsers.add_parser("fetch", help="Run only the fetcher against one URL")
     fetch.add_argument("url", help="URL to fetch")
@@ -119,6 +167,81 @@ def _stats(archivist: Archivist) -> int:
     print(f"jobs discovered: {stats['jobs_discovered']}")
     print(f"job revisions: {stats['job_revisions']}")
     print(f"crawls: {stats['crawls']}")
+    return 0
+
+
+def _inspect(args: argparse.Namespace, archivist: Archivist) -> int:
+    try:
+        rows = archivist.inspect_records(
+            args.table,
+            record_id=args.id,
+            source_id=args.source_id,
+            crawl_id=args.crawl_id,
+            job_id=args.job_id,
+            limit=args.limit,
+        )
+    except ValueError as error:
+        print(f"Inspection rejected: {error}")
+        return 2
+    if args.table == "jobs" and args.id is not None and rows:
+        revisions = archivist.inspect_records("revisions", job_id=args.id, limit=args.limit)
+        print(render_job_detail(rows[0], revisions))
+    else:
+        print(render_records(args.table, rows, detailed=args.id is not None))
+    return 0
+
+
+def _inspect_command(args: argparse.Namespace, archivist: Archivist) -> int:
+    service = ArchiveInspectionService(archivist)
+    if args.command == "show":
+        job, revisions = service.job(args.id)
+        if job is None:
+            print(f"No job found with id {args.id}.")
+            return 1
+        print(render_job_detail(job, revisions))
+        return 0
+
+    if args.command == "companies":
+        print(render_rows(("company", "active_jobs", "last_observed"), service.companies(args.query, args.limit)))
+        return 0
+
+    if args.command == "search":
+        print(render_rows(
+            ("source_identifier", "title", "company", "location", "salary", "created_at"),
+            service.search(args.query, args.limit),
+        ))
+        return 0
+
+    if args.command == "doctor":
+        report = service.doctor()
+        print(f"Database: {report.database_path}")
+        print(f"Integrity: {report.integrity}")
+        print(f"Foreign key violations: {report.foreign_key_violations}")
+        print("Table counts")
+        for table, count in report.tables.items():
+            print(f"  {table}: {count}")
+        return 0 if report.healthy else 1
+
+    if args.command == "dump":
+        rows = service.records(args.table, limit=args.limit)
+        print(json.dumps([dict(row) for row in rows], indent=2, sort_keys=True))
+        return 0
+
+    table_by_command = {
+        "jobs": "jobs",
+        "pages": "pages",
+        "crawl-history": "crawls",
+        "revisions": "revisions",
+    }
+    table = table_by_command[args.command]
+    rows = service.records(
+        table,
+        source_id=getattr(args, "source_id", None),
+        crawl_id=getattr(args, "crawl_id", None),
+        job_id=getattr(args, "job_id", None),
+        limit=args.limit,
+    )
+    print(render_records(table, rows))
     return 0
 
 
